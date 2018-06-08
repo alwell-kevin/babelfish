@@ -1,12 +1,13 @@
 [
   {
     "action": "talk",
-    "text": "Please wait while we connect you."
+    "text": "<speak><prosody rate='medium'>Welcome to the Nexmo Translator application powered by Microsoft.</prosody></speak>",
+    "voiceName": "Joey"
   },
   {
     "action": "connect",
     "eventUrl": [
-      "http://$hostname/event"
+      "https://$hostname/event"
     ],
     "from":"123456",
     "endpoint": [

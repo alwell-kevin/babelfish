@@ -1,5 +1,5 @@
-HOSTNAME = '<your-value>.ngrok.io'
-
+HOSTNAME = 'f6d1395c.ngrok.io'
+# https://f6d1395c.ngrok.io
 # Change the below values:
 #   - Replace the CALLER variable assignment with your number in the same format
 #   - Replace the LANGUAGE variable assignments with your languages
@@ -7,9 +7,9 @@ HOSTNAME = '<your-value>.ngrok.io'
 #     their languages. They can be found here:
 #     https://developer.nexmo.com/api/voice/ncco#voice-names
 
-CALLER = '447812345678'
-LANGUAGE1 = 'de-DE' # the caller's language
-VOICE1 = 'Marlene' # a Nexmo voice for the caller's language
+CALLER = '17326157295'
+LANGUAGE1 = 'es-us' # the caller's language
+VOICE1 = 'Miguel' # a Nexmo voice for the caller's language
 
 LANGUAGE2 = 'en-US' # the other person's language
-VOICE2 = 'Kimberly' # a Nexmo voice for the other person's language
+VOICE2 = 'Joey' # a Nexmo voice for the other person's language

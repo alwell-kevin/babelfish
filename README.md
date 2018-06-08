@@ -1,3 +1,5 @@
+##Adapted for Call center week 06/20/2018. Includes Mulesoft integration for language selection.
+
 # babelfish
 
 Using speech to text in combination with text translation and text to speech, we built a tool not unlike Google's _new_ babel platform. Call someone and they will hear what you say in their language 😮.
@@ -24,6 +26,7 @@ virtualenv venv
 source venv/bin/activate
 vim requirements.txt
 pip install -r requirements.txt
+Works with python version 2.7.9
 ```
 
 In another terminal window run:
