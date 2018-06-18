@@ -1,9 +1,11 @@
+# Linked: 12059001732
 from string import Template
 import json
 import os
 import requests
 import struct
 import StringIO
+import uuid
 
 from tornado import httpserver, httpclient, ioloop, web, websocket, gen
 from xml.etree import ElementTree
@@ -14,22 +16,32 @@ from config import HOSTNAME, CALLER, LANGUAGE1, VOICE1, LANGUAGE2, VOICE2
 from secrets import NEXMO_APPLICATION_ID, NEXMO_PRIVATE_KEY, MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET, NEXMO_NUMBER
 
 
-nexmo_client = nexmo.Client(application_id=NEXMO_APPLICATION_ID, private_key=NEXMO_PRIVATE_KEY)
+nexmo_client = nexmo.Client(
+    application_id=NEXMO_APPLICATION_ID, private_key=NEXMO_PRIVATE_KEY)
 azure_auth_client = AzureAuthClient(MICROSOFT_TRANSLATION_SPEECH_CLIENT_SECRET)
 
 conversation_id_by_phone_number = {}
 call_id_by_conversation_id = {}
+callerList = {}
+
+
+class Caller:
+    def __init__(self, phone, conv_uuid):
+        self.phone = phone
+        self.id = str(uuid.uuid4())
+        self.language = getCallerLanguage(phone)
+        self.conversation_uuid = conv_uuid
 
 
 class CallHandler(web.RequestHandler):
     @web.asynchronous
     def get(self):
-        data={}
+        data = {}
         data['hostname'] = HOSTNAME
         data['whoami'] = self.get_query_argument('from')
         data['cid'] = self.get_query_argument('conversation_uuid')
         conversation_id_by_phone_number[self.get_query_argument('from')] = self.get_query_argument('conversation_uuid')
-        print(conversation_id_by_phone_number)
+        getCaller(data['whoami'], data['cid'])
         filein = open('ncco.json')
         src = Template(filein.read())
         filein.close()
@@ -45,7 +57,8 @@ class EventHandler(web.RequestHandler):
         body = json.loads(self.request.body)
         if 'direction' in body and body['direction'] == 'inbound':
             if 'uuid' in body and 'conversation_uuid' in body:
-                call_id_by_conversation_id[body['conversation_uuid']] = body['uuid']
+                call_id_by_conversation_id[body['conversation_uuid']
+                                           ] = body['uuid']
         self.content_type = 'text/plain'
         self.write('ok')
         self.finish()
@@ -56,9 +69,11 @@ class WSHandler(websocket.WebSocketHandler):
 
     def open(self):
         print("Websocket Call Connected")
+        print(self)
 
     def translator_future(self, translate_from, translate_to):
-        uri = "wss://dev.microsofttranslator.com/speech/translate?from={0}&to={1}&api-version=1.0".format(translate_from[:2], translate_to)
+        uri = "wss://dev.microsofttranslator.com/speech/translate?from={0}&to={1}&api-version=1.0".format(
+            translate_from[:2], translate_to)
         request = httpclient.HTTPRequest(uri, headers={
             'Authorization': 'Bearer ' + azure_auth_client.get_access_token(),
         })
@@ -70,13 +85,16 @@ class WSHandler(websocket.WebSocketHandler):
             return
         msg = json.loads(new_message)
         if msg['translation'] != '':
-            print("Translated: " + "'" + msg['recognition'] + "' -> '" + msg['translation'] + "'")
+            print("Translated: " + "'" +
+                  msg['recognition'] + "' -> '" + msg['translation'] + "'")
             for key, value in conversation_id_by_phone_number.iteritems():
                 if key != self.whoami and value != None:
                     if self.whoami == CALLER:
-                        speak(call_id_by_conversation_id[value], msg['translation'], VOICE2)
+                        speak(
+                            call_id_by_conversation_id[value], msg['translation'], VOICE2)
                     else:
-                        speak(call_id_by_conversation_id[value], msg['translation'], VOICE1)
+                        speak(
+                            call_id_by_conversation_id[value], msg['translation'], VOICE1)
 
     @gen.coroutine
     def on_message(self, message):
@@ -87,12 +105,33 @@ class WSHandler(websocket.WebSocketHandler):
             message = json.loads(message)
             self.whoami = message['whoami']
             print("Sending wav header")
-            header = make_wave_header(16000)
+            messageCarrier = getCaller(message['whoami'], message['cid'])
+            
+            for key, value in callerList.iteritems():
+                print("************************************************************")
+                print(value.conversation_uuid)
+                print(messageCarrier.conversation_uuid)
+                print("-------------------------------------------------------------")
+                print(messageCarrier.phone)
+                print(value.phone)
+                print("************************************************************")
+                # if value.conversation_uuid == messageCarrier.conversation_uuid and value.phone != messageCarrier.phone:
+                if value.phone != messageCarrier.phone:
+                    print("HERE!")
+                    print("Message receiver properly set with conversation uuid: " + value.conversation_uuid)
+                    messageReceiver = value
+                    break
+                else:
+                    print("No message receiver properly set")
+                    messageReceiver = Caller("xxxxxxxxxx", "x")
 
-            if self.whoami == CALLER:
-                self.ws_future = self.translator_future(LANGUAGE1, LANGUAGE2)
-            else:
-                self.ws_future = self.translator_future(LANGUAGE2, LANGUAGE1)
+            header = make_wave_header(16000)
+            
+            print("Where languages are set")
+            print(messageCarrier.language)
+            print(messageReceiver.language)
+            
+            self.ws_future = self.translator_future(messageCarrier.language, messageReceiver.language)
 
             ws = yield self.ws_future
             ws.write_message(header, binary=True)
@@ -110,7 +149,8 @@ def make_wave_header(frame_rate):
     """
 
     if frame_rate not in [8000, 16000]:
-        raise ValueError("Sampling frequency, frame_rate, should be 8000 or 16000.")
+        raise ValueError(
+            "Sampling frequency, frame_rate, should be 8000 or 16000.")
 
     nchannels = 1
     bytes_per_sample = 2
@@ -136,9 +176,33 @@ def make_wave_header(frame_rate):
 
     return data
 
+# IF THE CALLER EXISTS RETURN THAT CALLER OBJECT
+# IF NOT CALLER EXISTS RETURN NEW CALLER OBJECT.
+
+
+def getCaller(phone, conv_uuid):
+
+    for key, value in callerList.iteritems():
+        if value.phone == phone:
+            print("Matching caller found.")
+            return value
+    
+    callerList[phone] = Caller(phone, conv_uuid)
+    print("Matching caller not found. CREATING NEW CALLER")
+    return callerList[phone]
+
+
+
+def getCallerLanguage(phone):
+    url = "http://translationdemo-fbna.cloudhub.io/language-pref?phone=" + phone
+    r = requests.get(url)
+    print("Mulesoft provided caller language: " + r.json().get("language"))
+    # If no language return value:
+    return r.json().get("language")
+
 
 def speak(uuid, text, vn):
-    print("speaking to: " + uuid  + " " + text)
+    print("speaking to: " + uuid + " " + text)
     response = nexmo_client.send_speech(uuid, text=text, voice_name=vn)
     print(response)
 
@@ -151,10 +215,9 @@ def main():
     ])
 
     http_server = httpserver.HTTPServer(application)
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT: ", 5000))
     http_server.listen(port)
-    print("Running on port: " + str(port))
-
+    print("Running on port:: " + str(port))
     ioloop.IOLoop.instance().start()
 
 
